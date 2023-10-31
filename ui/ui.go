@@ -21,6 +21,8 @@ func CreateUI() {
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Hello")
 
+	hostLabel := widget.NewLabel("Host")
+	hostInput := widget.NewEntry()
 	nameLabel := widget.NewLabel("Hostname")
 	nameInput := widget.NewEntry()
 	userLabel := widget.NewLabel("User")
@@ -55,6 +57,7 @@ func CreateUI() {
 			o.(*widget.Label).SetText(hosts[i].Host)
 		})
 	hostList.OnSelected = func(id widget.ListItemID) {
+		hostInput.SetText(hosts[id].Host)
 		nameInput.SetText(hosts[id].Name)
 		userInput.SetText(hosts[id].User)
 		portInput.SetText(hosts[id].Port)
@@ -85,10 +88,13 @@ func CreateUI() {
 			Portbase:     "",
 		}
 		hosts = append(hosts, newHost)
+
+		//Refresh list with and select new Host
 		hostList.Refresh()
 		hostList.Select(len(hosts) - 1)
 	})
 	saveButton := widget.NewButton("Save", func() {
+		host := hostInput.Text
 		name := nameInput.Text
 		user := userInput.Text
 		port := portInput.Text
@@ -103,6 +109,7 @@ func CreateUI() {
 		saveHost(
 			hosts[:],
 			selectedHostID,
+			host,
 			name,
 			user,
 			port,
@@ -115,10 +122,13 @@ func CreateUI() {
 			internalIP,
 			portbase,
 		)
+		hostList.Refresh()
 	})
 
 	hostBox := container.NewGridWithColumns(
 		2,
+		hostLabel,
+		hostInput,
 		nameLabel,
 		nameInput,
 		userLabel,
@@ -155,6 +165,7 @@ func CreateUI() {
 func saveHost(
 	hosts []data.Host,
 	id int,
+	host string,
 	name string,
 	user string,
 	port string,
@@ -166,6 +177,7 @@ func saveHost(
 	region string,
 	internalIP string,
 	portbase string) {
+	hosts[id].Host = host
 	hosts[id].Name = name
 	hosts[id].User = user
 	hosts[id].Port = port
