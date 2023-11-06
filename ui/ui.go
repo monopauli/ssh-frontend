@@ -3,17 +3,23 @@ package ui
 import (
 	"fmt"
 	"frontend/data"
+	"frontend/db"
+	"strconv"
+	"strings"
 
 	"fyne.io/fyne"
 	"fyne.io/fyne/app"
 	"fyne.io/fyne/container"
+	"fyne.io/fyne/dialog"
 	"fyne.io/fyne/widget"
 )
 
 func CreateUI() {
+	var selectedListItem int
+	var selectedHostId int
+	database := db.Connect()
+	hosts := db.SelectALL(database)
 
-	var selectedHostID int
-	hosts := data.GetHosts(*data.OpenConfig("config/hosts"))
 	for _, host := range hosts {
 		fmt.Println(host)
 	}
@@ -21,6 +27,54 @@ func CreateUI() {
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Hello")
 
+	//Host List Creation
+	hostList := widget.NewList(
+		func() int {
+			return len(hosts)
+		},
+		func() fyne.CanvasObject {
+			return widget.NewLabel("template")
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(hosts[i].Host)
+		})
+
+	//Menu
+	fileExportItem := fyne.NewMenuItem("Export", func() {})
+	editNewHostItem := fyne.NewMenuItem("New Host", func() {
+		newHost := data.Host{
+			Host:         "New Host",
+			Hostname:     "",
+			User:         "",
+			Port:         0,
+			IdentityFile: "",
+			SystemType:   "",
+			NodeType:     "Sentry",
+			Provider:     "",
+			Region:       "",
+			InternalIP:   "",
+			Portbase:     0,
+		}
+
+		id, err := db.AddEntry(database, newHost)
+		if err != nil {
+			fmt.Println(err)
+		}
+		hosts = db.SelectALL(database)
+		hostList.Refresh()
+		hostList.Select(data.FindHost(id, hosts))
+	})
+
+	fileMenu := fyne.NewMenu("File", fileExportItem)
+	editMenu := fyne.NewMenu("Edit", editNewHostItem)
+
+	menuBar := fyne.NewMainMenu(
+		fileMenu,
+		editMenu,
+	)
+	myWindow.SetMainMenu(menuBar)
+
+	//Host Information
 	hostLabel := widget.NewLabel("Host")
 	hostInput := widget.NewEntry()
 	nameLabel := widget.NewLabel("Hostname")
@@ -35,8 +89,6 @@ func CreateUI() {
 	systemTypeInput := widget.NewEntry()
 	nodeTypeLabel := widget.NewLabel("Node Type")
 	nodeTypeInput := widget.NewEntry()
-	nodeNetworksLabel := widget.NewLabel("Node Networks")
-	nodeNetworksInput := widget.NewEntry()
 	providerLabel := widget.NewLabel("Provider")
 	providerInput := widget.NewEntry()
 	regionLabel := widget.NewLabel("Region")
@@ -46,83 +98,75 @@ func CreateUI() {
 	portbaseLabel := widget.NewLabel("Portbase")
 	portbaseInput := widget.NewEntry()
 
-	hostList := widget.NewList(
-		func() int {
-			return len(hosts)
-		},
-		func() fyne.CanvasObject {
-			return widget.NewLabel("template")
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(hosts[i].Host)
-		})
+	//Host List Selection
 	hostList.OnSelected = func(id widget.ListItemID) {
 		hostInput.SetText(hosts[id].Host)
-		nameInput.SetText(hosts[id].Name)
+		nameInput.SetText(hosts[id].Hostname)
 		userInput.SetText(hosts[id].User)
-		portInput.SetText(hosts[id].Port)
-		keyInput.SetText(hosts[id].Key)
+		portInput.SetText(fmt.Sprint(hosts[id].Port))
+		keyInput.SetText(hosts[id].IdentityFile)
 		systemTypeInput.SetText(hosts[id].SystemType)
 		nodeTypeInput.SetText(hosts[id].NodeType)
-		nodeNetworksInput.SetText(hosts[id].NodeNetworks)
 		providerInput.SetText(hosts[id].Provider)
 		regionInput.SetText(hosts[id].Region)
 		internalIPInput.SetText(hosts[id].InternalIP)
-		portbaseInput.SetText(hosts[id].Portbase)
-		selectedHostID = id
+		portbaseInput.SetText(fmt.Sprint(hosts[id].Portbase))
+		selectedListItem = id
+		selectedHostId = hosts[id].ID
 	}
 
-	newButton := widget.NewButton("New Host", func() {
-		newHost := data.Host{
-			Host:         "New Host",
-			Name:         "",
-			User:         "",
-			Port:         "",
-			Key:          "",
-			SystemType:   "",
-			NodeType:     "",
-			NodeNetworks: "",
-			Provider:     "",
-			Region:       "",
-			InternalIP:   "",
-			Portbase:     "",
-		}
-		hosts = append(hosts, newHost)
-
-		//Refresh list with and select new Host
-		hostList.Refresh()
-		hostList.Select(len(hosts) - 1)
-	})
+	//Buttons
 	saveButton := widget.NewButton("Save", func() {
-		host := hostInput.Text
-		name := nameInput.Text
-		user := userInput.Text
-		port := portInput.Text
-		key := keyInput.Text
-		systemType := systemTypeInput.Text
-		nodeType := nodeTypeInput.Text
-		nodeNetworks := nodeNetworksInput.Text
-		provider := providerInput.Text
-		region := regionInput.Text
-		internalIP := internalIPInput.Text
-		portbase := portbaseInput.Text
-		saveHost(
-			hosts[:],
-			selectedHostID,
-			host,
-			name,
-			user,
-			port,
-			key,
-			systemType,
-			nodeType,
-			nodeNetworks,
-			provider,
-			region,
-			internalIP,
-			portbase,
-		)
-		hostList.Refresh()
+		oldHost := hosts[selectedListItem]
+		port, _ := strconv.Atoi(portInput.Text)
+		portbase, _ := strconv.Atoi(portbaseInput.Text)
+		editedHost := data.Host{
+			ID:           oldHost.ID,
+			Host:         hostInput.Text,
+			Hostname:     nameInput.Text,
+			User:         userInput.Text,
+			Port:         port,
+			IdentityFile: keyInput.Text,
+			SystemType:   systemTypeInput.Text,
+			NodeType:     nodeTypeInput.Text,
+			Provider:     providerInput.Text,
+			Region:       regionInput.Text,
+			InternalIP:   internalIPInput.Text,
+			Portbase:     portbase,
+		}
+
+		result := data.CompareStructs(oldHost, editedHost)
+		var builder strings.Builder
+		builder.WriteString("Do you want to make these changes?\n")
+
+		for _, v := range result {
+			builder.WriteString(fmt.Sprintf("%s: %s -> %s\n", v[0], v[1], v[2]))
+		}
+		changes := builder.String()
+		dialog.ShowConfirm("Warning", changes, func(confirm bool) {
+			if confirm {
+				id := editedHost.ID
+				db.Update(database, editedHost, selectedHostId)
+				hosts = db.SelectALL(database)
+				hostList.Refresh()
+				hostList.Select(data.FindHost(id, hosts))
+
+			}
+		}, myWindow)
+
+	})
+	deleteButton := widget.NewButton("Delete", func() {
+		message := fmt.Sprintf("Do you really want to delete this Host: %s?", hosts[selectedListItem].Host)
+		dialog.ShowConfirm("Warning", message, func(confirm bool) {
+			if confirm {
+				fmt.Println("Host to delete: ")
+				fmt.Println(hosts[selectedListItem])
+				db.DeleteEntry(database, hosts[selectedListItem])
+				hosts = db.SelectALL(database)
+				hostList.Refresh()
+			}
+		}, myWindow)
+
 	})
 
 	hostBox := container.NewGridWithColumns(
@@ -141,8 +185,6 @@ func CreateUI() {
 		systemTypeInput,
 		nodeTypeLabel,
 		nodeTypeInput,
-		nodeNetworksLabel,
-		nodeNetworksInput,
 		providerLabel,
 		providerInput,
 		regionLabel,
@@ -152,7 +194,7 @@ func CreateUI() {
 		portbaseLabel,
 		portbaseInput,
 		saveButton,
-		newButton,
+		deleteButton,
 	)
 	myWindow.SetContent(container.NewHBox(
 		hostList,
@@ -160,36 +202,4 @@ func CreateUI() {
 	))
 	myWindow.ShowAndRun()
 
-}
-
-func saveHost(
-	hosts []data.Host,
-	id int,
-	host string,
-	name string,
-	user string,
-	port string,
-	key string,
-	systemType string,
-	nodeType string,
-	nodeNetworks string,
-	provider string,
-	region string,
-	internalIP string,
-	portbase string) {
-	hosts[id].Host = host
-	hosts[id].Name = name
-	hosts[id].User = user
-	hosts[id].Port = port
-	hosts[id].Key = key
-	hosts[id].SystemType = systemType
-	hosts[id].NodeType = nodeType
-	hosts[id].NodeNetworks = nodeNetworks
-	hosts[id].Provider = provider
-	hosts[id].Region = region
-	hosts[id].InternalIP = internalIP
-	hosts[id].Portbase = portbase
-
-	fmt.Println("Saved Host: ")
-	fmt.Println(hosts[id])
 }

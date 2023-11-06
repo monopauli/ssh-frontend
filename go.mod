@@ -5,6 +5,7 @@ go 1.19
 require (
 	fyne.io/fyne v1.4.3
 	github.com/kevinburke/ssh_config v1.2.0
+	github.com/lib/pq v1.10.9
 )
 
 require (
@@ -21,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.8.4 // indirect
 	golang.org/x/image v0.11.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

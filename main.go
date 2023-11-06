@@ -1,8 +1,6 @@
 package main
 
-import (
-	"frontend/ui"
-)
+import "frontend/ui"
 
 func main() {
 	ui.CreateUI()

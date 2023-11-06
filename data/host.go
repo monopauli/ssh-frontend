@@ -1,24 +1,27 @@
 package data
 
 import (
+	"fmt"
 	"os"
+	"reflect"
+	"strconv"
 
 	"github.com/kevinburke/ssh_config"
 )
 
 type Host struct {
+	ID           int
 	Host         string
-	Name         string
+	Hostname     string
 	User         string
-	Port         string
-	Key          string
+	Port         int
+	IdentityFile string
 	SystemType   string
 	NodeType     string
-	NodeNetworks string
 	Provider     string
 	Region       string
 	InternalIP   string
-	Portbase     string
+	Portbase     int
 }
 
 func OpenConfig(path string) *ssh_config.Config {
@@ -37,25 +40,24 @@ func GetHosts(cfg ssh_config.Config) []Host {
 			hostName := node.String()
 			name, _ := cfg.Get(node.String(), "HostName")
 			user, _ := cfg.Get(node.String(), "User")
-			port, _ := cfg.Get(node.String(), "Port")
+			portstring, _ := cfg.Get(node.String(), "Port")
+			port, _ := strconv.Atoi(portstring)
 			key, _ := cfg.Get(node.String(), "IdentityFile")
 			systemtype, _ := cfg.Get(node.String(), "SystemType")
 			nodetype, _ := cfg.Get(node.String(), "NodeType")
-			nodenetworks, _ := cfg.Get(node.String(), "NodeNetworks")
 			provider, _ := cfg.Get(node.String(), "Provider")
 			region, _ := cfg.Get(node.String(), "Region")
 			internalIP, _ := cfg.Get(node.String(), "InternalIP")
-			portbase, _ := cfg.Get(node.String(), "Portbase")
-
+			portbasestring, _ := cfg.Get(node.String(), "Portbase")
+			portbase, _ := strconv.Atoi(portbasestring)
 			newHost := Host{
 				Host:         hostName,
-				Name:         name,
+				Hostname:     name,
 				User:         user,
 				Port:         port,
-				Key:          key,
+				IdentityFile: key,
 				SystemType:   systemtype,
 				NodeType:     nodetype,
-				NodeNetworks: nodenetworks,
 				Provider:     provider,
 				Region:       region,
 				InternalIP:   internalIP,
@@ -65,4 +67,33 @@ func GetHosts(cfg ssh_config.Config) []Host {
 		}
 	}
 	return hosts[:]
+}
+
+func CompareStructs(a, b interface{}) [][]string {
+	var changeList [][]string
+	aVal := reflect.ValueOf(a)
+	bVal := reflect.ValueOf(b)
+
+	for i := 0; i < aVal.NumField(); i++ {
+		aField := aVal.Field(i)
+		bField := bVal.Field(i)
+		fieldName := aVal.Type().Field(i).Name
+
+		// Compare field values
+		if aField.Interface() != bField.Interface() {
+			changeList = append(changeList, []string{fieldName, fmt.Sprintf("%v", aField.Interface()), fmt.Sprintf("%v", bField.Interface())})
+			//fmt.Printf("Field '%s' differs - %v != %v\n", fieldName, aField.Interface(), bField.Interface())
+		}
+	}
+	fmt.Println(changeList)
+	return changeList
+}
+
+func FindHost(id int, hosts []Host) int {
+	for i, host := range hosts {
+		if host.ID == id {
+			return i
+		}
+	}
+	return -1
 }
