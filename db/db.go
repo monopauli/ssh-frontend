@@ -65,9 +65,31 @@ func AddEntry(db *sql.DB, host data.Host) (int, error) {
 
 func DeleteEntry(db *sql.DB, host data.Host) {
 	query := `
-		DELETE FROM hosts WHERE id = $1
-		`
+	DELETE FROM hosts WHERE id = $1
+	`
 	_, err := db.Exec(query, host.ID)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func DeleteNetworkFromHost(db *sql.DB, network_name string, host_id int) {
+	query := `
+		DELETE FROM hosts_networks WHERE network_name = $1 AND host_id = $2
+		`
+	_, err := db.Exec(query, network_name, host_id)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func AddNetworkToHost(db *sql.DB, host_id int, network_name string) {
+	query := `
+	INSERT INTO hosts_networks VALUES ($1,$2)
+	`
+	_, err := db.Exec(query, host_id, network_name)
 
 	if err != nil {
 		log.Fatal(err)
@@ -104,7 +126,57 @@ func Update(db *sql.DB, host data.Host, id int) {
 
 }
 
+func selectNetworks(db *sql.DB) []data.HostNetwork {
+	var hostsNetworks []data.HostNetwork
+
+	rows, err := db.Query(`
+	SELECT h.id, n.name FROM hosts h 
+	JOIN hosts_networks hn ON h.id = hn.host_id
+	JOIN networks n ON hn.network_name = n.name`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var network string
+		if err := rows.Scan(
+			&id,
+			&network,
+		); err != nil {
+			log.Fatal(err)
+		}
+		newHostNetwork := data.HostNetwork{
+			ID:      id,
+			Network: network,
+		}
+		hostsNetworks = append(hostsNetworks, newHostNetwork)
+	}
+	return hostsNetworks
+}
+
+func SelectAllNetworks(db *sql.DB) []string {
+	var networks []string
+	rows, err := db.Query(`
+	SELECT name FROM networks`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(
+			&name,
+		); err != nil {
+			log.Fatal(err)
+		}
+		networks = append(networks, name)
+	}
+	return networks
+}
+
 func SelectALL(db *sql.DB) []data.Host {
+	hostNetworks := selectNetworks(db)
 	var hostList []data.Host
 	rows, err := db.Query(`
     SELECT id, host, hostname, username, port, identityfile, systemtype,
@@ -128,6 +200,7 @@ func SelectALL(db *sql.DB) []data.Host {
 		var internalip string
 		var portbase int
 		var id int
+		var networks []string
 		if err := rows.Scan(
 			&id,
 			&host,
@@ -144,6 +217,11 @@ func SelectALL(db *sql.DB) []data.Host {
 		); err != nil {
 			log.Fatal(err)
 		}
+		for _, hn := range hostNetworks {
+			if hn.ID == id {
+				networks = append(networks, hn.Network)
+			}
+		}
 		newhost := data.Host{
 			ID:           id,
 			Host:         host,
@@ -157,6 +235,7 @@ func SelectALL(db *sql.DB) []data.Host {
 			Region:       region,
 			InternalIP:   internalip,
 			Portbase:     portbase,
+			Networks:     networks,
 		}
 		hostList = append(hostList, newhost)
 	}

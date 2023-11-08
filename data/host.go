@@ -22,6 +22,12 @@ type Host struct {
 	Region       string
 	InternalIP   string
 	Portbase     int
+	Networks     []string
+}
+
+type HostNetwork struct {
+	ID      int
+	Network string
 }
 
 func OpenConfig(path string) *ssh_config.Config {
@@ -79,13 +85,18 @@ func CompareStructs(a, b interface{}) [][]string {
 		bField := bVal.Field(i)
 		fieldName := aVal.Type().Field(i).Name
 
-		// Compare field values
-		if aField.Interface() != bField.Interface() {
-			changeList = append(changeList, []string{fieldName, fmt.Sprintf("%v", aField.Interface()), fmt.Sprintf("%v", bField.Interface())})
-			//fmt.Printf("Field '%s' differs - %v != %v\n", fieldName, aField.Interface(), bField.Interface())
+		// If it's a slice, we need to handle it differently since != doesn't work on slices
+		if aField.Kind() == reflect.Slice {
+			if !reflect.DeepEqual(aField.Interface(), bField.Interface()) {
+				changeList = append(changeList, []string{fieldName, fmt.Sprintf("%v", aField.Interface()), fmt.Sprintf("%v", bField.Interface())})
+			}
+		} else {
+			// Compare field values for non-slice types
+			if aField.Interface() != bField.Interface() {
+				changeList = append(changeList, []string{fieldName, fmt.Sprintf("%v", aField.Interface()), fmt.Sprintf("%v", bField.Interface())})
+			}
 		}
 	}
-	fmt.Println(changeList)
 	return changeList
 }
 
